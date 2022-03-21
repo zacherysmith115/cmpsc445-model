@@ -1,4 +1,5 @@
 import pandas as pd
+from decouple import config
 
 # Documentation @ https://www.alphavantage.co/documentation/
 # Alphavantage has Search Endpoint function, which helps for autocomplete
@@ -71,6 +72,6 @@ class StockScraper():
 
 
 # Testing to get daily with NVIDIA
-key = 'JZCKNFAEV60SGY5F'
+key = config('API_KEY')
 stockScraper = StockScraper(key)
 print(stockScraper.get_daily('NVDA'))
