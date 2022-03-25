@@ -112,8 +112,8 @@ class StockScraper(object):
 
 if __name__ == "__main__":
     key = config('API_KEY')
-    stockScraper = StockScraper(key)
-    metadata, timeseries = stockScraper.get_daily('NVDA')
+    scraper = StockScraper(key)
+    metadata, timeseries = scraper.get_daily('NVDA')
 
     print(metadata)
     print(timeseries.head(10))
