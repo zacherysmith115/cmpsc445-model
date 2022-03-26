@@ -13,7 +13,7 @@ def download_data(tickers: List[str], dir: str) -> None:
 
     for ticker in tickers: 
         metadata, timeseries = scraper.get_daily(ticker)
-        timeseries = timeseries["4. close"].to_dict()
+        timeseries = timeseries.to_dict()
 
         metadata["6. Time Series"] = timeseries
 
