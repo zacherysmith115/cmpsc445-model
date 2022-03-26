@@ -1,9 +1,11 @@
 
+from cgi import test
 import json
 import os
 import numpy as np
 import pandas as pd
 import tensorflow as tf
+import matplotlib.pyplot as plt
 from pandas import DataFrame
 from pandas import Series
 from typing import Tuple
@@ -11,8 +13,11 @@ from typing import List
 from typing import Union
 from tensorflow import Tensor
 from tensorflow.python.keras.models import Model
+from tensorflow.python.keras.models import Sequential
+from tensorflow.python.keras.layers import LSTM
+from tensorflow.python.keras.layers import Dense
+from tensorflow.python.keras.layers import Reshape
 from tensorflow.python.keras.losses import MeanSquaredError
-from tensorflow.python.keras.optimizer_v1 import Adam
 from tensorflow.python.keras.metrics import MeanAbsoluteError
 from tensorflow.python.keras.callbacks import EarlyStopping
 from tensorflow.python.keras.callbacks import History
@@ -27,18 +32,19 @@ Tensorflow Logging:
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = '1'
 
 config = {
-    "input_width": 5,
+    "input_width": 10,
     "label_width": 5,
     "offset": 1,
+    "num_features": None,
     "columns": ["4. close"],
     "train_split": 0.7,
     "val_split": 0.8,
     "test_split": 0.9,
     "batch_size": 32,
-    "epochs": 24,
+    "epochs": 36,
     "patience": 2,
     "loss_func": MeanSquaredError(),
-    "optmizer": Adam(),
+    "optmizer": tf.optimizers.Adam(),
     "metrics": [MeanAbsoluteError()],
     "callbacks": [EarlyStopping()]
 }
@@ -55,9 +61,14 @@ class Sequence(object):
     test_split = config["test_split"]
 
     def __init__(self, sym: str, timeseries: DataFrame) -> None:
-        self.sym = sym
-        self.ts_df: DataFrame = timeseries.iloc[::-1]
+        timeseries = timeseries.iloc[::-1]
 
+        if len(timeseries > 1300):
+            timeseries=timeseries[:1300]
+
+        self.sym = sym
+        self.ts_df: DataFrame = timeseries
+        config["num_features"] = self.ts_df.shape[1]
         self.ts_df_norm: pd.DataFrame = None
         self.train_df: pd.DataFrame = None
         self.val_df: pd.DataFrame = None
@@ -162,6 +173,7 @@ class WindowGenerator(object):
 
         return inputs, labels
 
+
     def __make_dataset(self, data: DataFrame) -> tf.data.Dataset:
         data = np.array(data, dtype=float)
         ds: tf.data.Dataset = tf.keras.utils.timeseries_dataset_from_array(
@@ -174,7 +186,36 @@ class WindowGenerator(object):
                                         )
         return ds.map(self.__split_window)
 
+    
+    def plot(self, model: Model=None, column: str = config["columns"][0], n: int=3) -> None:
+        inputs, labels = next(iter(self.get_train_dataset()))
+        plt.figure(figsize=(12, 8))
+        plot_col_index = self.column_indices[column]
 
+        n = min(n, len(inputs))
+        for i in range(n):
+            plt.subplot(n, 1, i+1)
+            plt.ylabel(f'{column} [normed]')
+            plt.plot(self.inputs_indices, inputs[i, :, plot_col_index],
+                     label='Inputs', marker='.', zorder=-10)
+
+            label_col_index = self.label_columns_indices.get(column, None)
+
+            plt.scatter(self.labels_indices, labels[i, :, label_col_index],
+                edgecolors='k', label='Labels', c='#2ca02c', s=64)
+            
+            if model is not None:
+                predictions = model(inputs)
+                plt.scatter(self.labels_indices, predictions[i, :, label_col_index],
+                            marker='X', edgecolors='k', label='Predictions',
+                            c='#ff7f0e', s=64)
+
+            if i == 0:
+                plt.legend()
+
+        plt.xlabel('Day')
+        plt.show()
+            
     def get_train_dataset(self) -> tf.data.Dataset:
         return self.__make_dataset(self.train_df)
 
@@ -203,9 +244,11 @@ def read_data(src: str) -> List[Sequence]:
             
             sym = r["2. Symbol"]
             df = DataFrame.from_dict(r["6. Time Series"], dtype=float)
+
             data.append(Sequence(sym, df))
 
     return data
+
 
 def fit(model: Model, window: WindowGenerator) -> History:
     model.compile(loss=config["loss_func"],
@@ -224,19 +267,37 @@ data = read_data('../data/data.json')
 data = data[0]
 print(data)
 
-w = WindowGenerator(config["input_width"],
+window = WindowGenerator(config["input_width"],
                     config["label_width"],
                     config["offset"],
                     data,
                     config["columns"])
 
-print(w)
+window.plot()
 
-train_ds = w.get_train_dataset()
-val_ds = w.get_val_dataset()
-test_ds = w.get_test_dataset()
+train_ds = window.get_train_dataset()
+val_ds = window.get_val_dataset()
+test_ds = window.get_test_dataset()
+
 
 for inputs, labels in train_ds.take(1):
     print(f'Inputs shape (batch, steps, features): {inputs.shape}')
-    print(f'Labels shape (batch, steps, features): {labels.shape}')
+    print(f'Labels shape (batch, steps, features): {labels.shape}\n')
 
+
+lstm: Sequential = tf.keras.models.Sequential([
+            LSTM(32, return_sequences=False),
+            Dense(config["label_width"]*config["num_features"],
+                  kernel_initializer=tf.initializers.zeros()),
+            Reshape([config["label_width"], config["num_features"]])
+            ])
+
+history = fit(lstm, window)
+window.plot(model=lstm)
+
+performance = (
+    lstm.evaluate(window.get_val_dataset()),
+    lstm.evaluate(window.get_test_dataset(), verbose=0)
+)
+
+print(performance)
