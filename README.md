@@ -2,7 +2,7 @@
 Attempting to utilize a LSTM model to make short term stock market predictions. 
 
 # Enviroment 
-A virtual enviroment would be recommend for this project utilzing python 3.8.10
+A virtual enviroment would be recommend for this project utilizing python 3.8.10
 
 For conda: 
 
