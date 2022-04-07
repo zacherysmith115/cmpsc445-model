@@ -114,6 +114,5 @@ if __name__ == "__main__":
     key = config('API_KEY')
     scraper = StockScraper(key)
     metadata, timeseries = scraper.get_daily('NVDA')
-
     print(metadata)
     print(timeseries.head(10))
