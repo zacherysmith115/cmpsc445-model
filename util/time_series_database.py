@@ -3,7 +3,7 @@ import pandas as pd
 from typing import Tuple, List
 from decouple import config
 from stock_scraper import StockScraper
-
+import time
 
 class TimeSeriesDB():
 
@@ -30,7 +30,7 @@ class TimeSeriesDB():
             return pd.DataFrame()
 
         
-    def insert_daily(self, symbol: str, output_size: str='compact'):
+    def insert_daily(self, symbol: str, output_size: str='compact') -> bool:
         """
         Inserts daily data into database
         Returns True if successful, else returns false
@@ -41,6 +41,22 @@ class TimeSeriesDB():
             for _, row in timeseries.iterrows():
                 self.cur.execute("INSERT INTO timeseries VALUES (?, ?, ?, ?, ?, ?, ?)",
                 (row.name, symbol, row['1. open'], row['2. high'], row['3. low'], row['4. close'], row['5. volume']))
+            # Save / commit changes
+            self.con.commit()
+            return True
+        except:
+            return False
+
+    def insert_time_series(self, meta: dict, df: pd.DataFrame) -> bool:
+        """
+        Inserts data given by user into database
+        Requires metadata for symbol
+        """
+        try:
+            df.reset_index()
+            for _, row in df.iterrows():
+                self.cur.execute("INSERT INTO timeseries VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (row.name, meta['2. Symbol'], row['1. open'], row['2. high'], row['3. low'], row['4. close'], row['5. volume']))
             # Save / commit changes
             self.con.commit()
             return True
@@ -70,15 +86,17 @@ class TimeSeriesDB():
         # Close connection
         self.con.close()
 
-    def connect(self, test=False):
+    def connect(self, test=False, dir='../data/', db_name='test.db'):
         """
-        Connects database
+        Connects to database
+        Will create database at specified directory dir. Defaults path to data folder from util folder.
+        User can change database name. Defaults to test.db
         """
         if test:
             self.con = sqlite3.connect(':memory:')
         else:
             # Create connection to database
-            self.con = sqlite3.connect('../data/test.db')
+            self.con = sqlite3.connect(dir + db_name)
         # Cursor to point to database
         self.cur = self.con.cursor()
         # Create table
@@ -98,3 +116,11 @@ if __name__ == "__main__":
     print(ts_db.insert_daily("NVDA"))
     print(ts_db.select("NVDA", "2022-02-10"))
     print(ts_db.select_all("NVDA"))
+
+    # Testing manual insert
+    # Wait 5 seconds to make another API call
+    time.sleep(5)
+    scraper = StockScraper(key)
+    meta, df = scraper.get_daily("AAPL")
+    print(ts_db.insert_time_series(meta, df))
+    print(ts_db.select_all("AAPL"))
