@@ -1,5 +1,3 @@
-
-from cgi import test
 import json
 import os
 import numpy as np
@@ -32,9 +30,9 @@ Tensorflow Logging:
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = '1'
 
 config = {
-    "input_width": 10,
-    "label_width": 5,
-    "offset": 1,
+    "input_width": 20,
+    "label_width": 10,
+    "offset": 10,
     "num_features": None,
     "columns": ["4. close"],
     "train_split": 0.7,
@@ -69,6 +67,7 @@ class Sequence(object):
         self.sym = sym
         self.ts_df: DataFrame = timeseries
         config["num_features"] = self.ts_df.shape[1]
+
         self.ts_df_norm: pd.DataFrame = None
         self.train_df: pd.DataFrame = None
         self.val_df: pd.DataFrame = None
@@ -81,27 +80,52 @@ class Sequence(object):
 
     def __split(self) -> None:
         self.train_df = self.ts_df[0:int(self.n_rows*self.train_split)]
-        self.val_df = self.ts_df[int(self.n_rows*self.train_split):int(self.n_rows*self.val_split)]
+        self.val_df = self.ts_df[int(self.n_rows*self.train_split):int(self.n_rows*self.test_split)]
         self.test_df = self.ts_df[int(self.n_rows*self.test_split):]
 
 
     def __normalize(self) -> None:
-        mean = self.train_df.mean()
-        std = self.train_df.std()
+        self.mean = self.train_df.mean()
+        self.std = self.train_df.std()
 
-        self.train_df = (self.train_df - mean) / std
-        self.val_df = (self.val_df - mean) / std
-        self.test_df = (self.test_df - mean) / std
+        self.train_df = (self.train_df - self.mean) / self.std
+        self.val_df = (self.val_df - self.mean) / self.std
+        self.test_df = (self.test_df - self.mean) / self.std
+
+
+    def invert(self, df: DataFrame) -> DataFrame:
+        """Reverses the normalization"""
+        return df * self.std + self.mean
+
 
     def __getitem__(self, i: Union[int, slice]) -> Union[DataFrame, Series]:
         return self.ts_df.iloc[i]
 
+
     def __repr__(self) -> str:
         return f'\n{str(self.train_df)}\n'
+
 
     def get_splits(self) -> Tuple[DataFrame, DataFrame, DataFrame]:
         return self.train_df, self.val_df, self.test_df
 
+
+    def plot(self) -> None: 
+        plt.figure(figsize=(12, 8))
+
+        indices = [i for i in range(len(self.ts_df))]
+        train_indices = indices[0:int(self.n_rows*self.train_split)]
+        val_indices = indices[int(self.n_rows*self.train_split):int(self.n_rows*self.test_split)]
+        test_indices = indices[int(self.n_rows*self.test_split):]
+
+        plt.plot(train_indices, self.train_df['4. close'], c='#ff0000', label='train')
+        plt.plot(val_indices, self.val_df['4. close'], c='#00ff00', label='val')
+        plt.plot(test_indices, self.test_df['4. close'], c='#0000ff', label='test')
+        
+        plt.ylabel('Close [normed]')
+        plt.xlabel('Time Step')
+        plt.legend()
+        plt.show()
 
 class WindowGenerator(object):
     """
@@ -130,14 +154,14 @@ class WindowGenerator(object):
     """
 
     def __init__(self, inputs_width: int, labels_width: int, offset: int, 
-                 batch: Sequence, label_columns: List[str]) -> None:
+                 seq: Sequence, label_columns: List[str]) -> None:
         """
-        feature_width =the window size of the feature(s) 
+        inputs_width = the window size of the input(s) 
         label_width = the window size of label(s)
-        offset = the timesteps betwen feature_width and label width 
+        offset = the timesteps betwen input_width and the end of label_width 
         """
         
-        self.train_df, self.val_df, self.test_df = batch.get_splits()
+        self.train_df, self.val_df, self.test_df = seq.get_splits()
         self.label_columns = label_columns
         self.label_columns_indices = {name:i for i, name in enumerate(label_columns)}
         self.column_indices = {name:i for i, name in enumerate(self.train_df.columns)}
@@ -216,6 +240,7 @@ class WindowGenerator(object):
         plt.xlabel('Day')
         plt.show()
             
+            
     def get_train_dataset(self) -> tf.data.Dataset:
         return self.__make_dataset(self.train_df)
 
@@ -241,7 +266,6 @@ def read_data(src: str) -> List[Sequence]:
     data = []
     with open(src, 'r') as f:
         for r in json.loads(f.read()): 
-            
             sym = r["2. Symbol"]
             df = DataFrame.from_dict(r["6. Time Series"], dtype=float)
 
@@ -266,6 +290,7 @@ def fit(model: Model, window: WindowGenerator) -> History:
 data = read_data('../data/data.json')
 data = data[0]
 print(data)
+# data.plot()
 
 window = WindowGenerator(config["input_width"],
                     config["label_width"],
@@ -273,7 +298,8 @@ window = WindowGenerator(config["input_width"],
                     data,
                     config["columns"])
 
-window.plot()
+print(window)
+# window.plot()
 
 train_ds = window.get_train_dataset()
 val_ds = window.get_val_dataset()
@@ -285,6 +311,7 @@ for inputs, labels in train_ds.take(1):
     print(f'Labels shape (batch, steps, features): {labels.shape}\n')
 
 
+
 lstm: Sequential = tf.keras.models.Sequential([
             LSTM(32, return_sequences=False),
             Dense(config["label_width"]*config["num_features"],
@@ -292,12 +319,12 @@ lstm: Sequential = tf.keras.models.Sequential([
             Reshape([config["label_width"], config["num_features"]])
             ])
 
-history = fit(lstm, window)
-window.plot(model=lstm)
+# history = fit(lstm, window)
+# window.plot(model=lstm)
 
-performance = (
-    lstm.evaluate(window.get_val_dataset()),
-    lstm.evaluate(window.get_test_dataset(), verbose=0)
-)
+# performance = (
+#     lstm.evaluate(window.get_val_dataset()),
+#     lstm.evaluate(window.get_test_dataset(), verbose=0)
+# )
 
-print(performance)
+# print(performance)
