@@ -37,7 +37,6 @@ config = {
     "columns": ["4. close"],
     "train_split": 0.7,
     "val_split": 0.8,
-    "test_split": 0.9,
     "batch_size": 32,
     "epochs": 36,
     "patience": 2,
@@ -56,7 +55,6 @@ class Sequence(object):
 
     train_split = config["train_split"]
     val_split = config["val_split"]
-    test_split = config["test_split"]
 
     def __init__(self, sym: str, timeseries: DataFrame) -> None:
         timeseries = timeseries.iloc[::-1]
@@ -80,8 +78,8 @@ class Sequence(object):
 
     def __split(self) -> None:
         self.train_df = self.ts_df[0:int(self.n_rows*self.train_split)]
-        self.val_df = self.ts_df[int(self.n_rows*self.train_split):int(self.n_rows*self.test_split)]
-        self.test_df = self.ts_df[int(self.n_rows*self.test_split):]
+        self.val_df = self.ts_df[int(self.n_rows*self.train_split):int(self.n_rows*self.val_split)]
+        self.test_df = self.ts_df[int(self.n_rows*self.val_split):]
 
 
     def __normalize(self) -> None:
@@ -172,7 +170,7 @@ class WindowGenerator(object):
 
         self.total_window_size = inputs_width + offset
 
-        # Detemine the inputs indices
+        # Determine the inputs indices
         self.inputs_slice = slice(0, inputs_width)
         self.inputs_indices = np.arange(self.total_window_size)[self.inputs_slice]
         
