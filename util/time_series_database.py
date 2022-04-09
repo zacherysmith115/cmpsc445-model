@@ -48,7 +48,7 @@ class TimeSeriesDB():
         except:
             return False
 
-    def insert_time_series(self, meta: dict, df: pd.DataFrame) -> bool:
+    def insert(self, meta: dict, df: pd.DataFrame) -> bool:
         """
         Inserts data given by user into database
         Requires metadata for symbol
@@ -128,5 +128,5 @@ if __name__ == "__main__":
     time.sleep(5)
     scraper = StockScraper(key)
     meta, df = scraper.get_daily("AAPL")
-    print(ts_db.insert_time_series(meta, df))
+    print(ts_db.insert(meta, df))
     print(ts_db.select_all("AAPL"))
