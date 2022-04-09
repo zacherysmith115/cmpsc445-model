@@ -28,14 +28,14 @@ class TimeSeriesDB():
             return df
         else:
             return pd.DataFrame()
-
         
     def insert_daily(self, symbol: str, output_size: str='compact') -> bool:
         """
         Inserts daily data into database
         Returns True if successful, else returns false
         """
-        self.create_table(symbol)
+        symbol = self.__format_symbol(symbol)
+        self.__create_table(symbol)
         request = "INSERT INTO {} VALUES (?, ?, ?, ?, ?, ?)".format(symbol)
         try:
             _, timeseries = self.scraper.get_daily(symbol, output_size=output_size)
@@ -53,8 +53,9 @@ class TimeSeriesDB():
         Inserts data given by user into database
         Requires metadata for symbol
         """
-        self.create_table(meta['2. Symbol'])
-        request = "INSERT INTO {} VALUES (?, ?, ?, ?, ?, ?)".format(meta['2. Symbol'])
+        symbol = self.__format_symbol(meta['2. Symbol'])
+        self.__create_table(symbol)
+        request = "INSERT INTO {} VALUES (?, ?, ?, ?, ?, ?)".format(symbol)
         try:
             df.reset_index()
             for _, row in df.iterrows():
@@ -69,6 +70,7 @@ class TimeSeriesDB():
         """
         Gets single row using symbol and date
         """
+        symbol = self.__format_symbol(symbol)
         request = "SELECT * FROM {} WHERE date=?".format(symbol)
         self.cur.execute(request, (date,))
         return self.__parse_request()
@@ -77,6 +79,7 @@ class TimeSeriesDB():
         """
         Gets all data associated with a symbol
         """
+        symbol = self.__format_symbol(symbol)
         request = "SELECT * FROM {}".format(symbol)
         self.cur.execute(request)
         return self.__parse_request()
@@ -104,8 +107,10 @@ class TimeSeriesDB():
         # Cursor to point to database
         self.cur = self.con.cursor()
 
-    def create_table(self, symbol):
-        # Create table
+    def __create_table(self, symbol):
+        """
+        Create table for company using their symbol
+        """
         request = '''CREATE TABLE IF NOT EXISTS {} (
             date TEXT,
             open REAL,
@@ -116,6 +121,14 @@ class TimeSeriesDB():
             UNIQUE (date) ON CONFLICT IGNORE)'''.format(symbol)
         self.cur.execute(request)
 
+    def __format_symbol(self, symbol: str) -> str:
+        """
+        Removes special characters from symbol to make it valid for tables
+        """
+        trans_table = str.maketrans('', '', '.')
+        return symbol.translate(trans_table)
+
+
 if __name__ == "__main__":
     key = config('API_KEY')
     ts_db = TimeSeriesDB(scraper_key=key, test=False)
@@ -124,9 +137,9 @@ if __name__ == "__main__":
     print(ts_db.select_all("NVDA"))
 
     # Testing manual insert
-    # Wait 5 seconds to make another API call
-    time.sleep(5)
+    # Wait 12 seconds to make another API call
+    time.sleep(12)
     scraper = StockScraper(key)
-    meta, df = scraper.get_daily("AAPL")
+    meta, df = scraper.get_daily("BRK.B")
     print(ts_db.insert(meta, df))
-    print(ts_db.select_all("AAPL"))
+    print(ts_db.select_all("BRK.B"))

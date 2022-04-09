@@ -76,8 +76,9 @@ class BatchScraper():
         Gets daily data on given tickers and stores it in database.
         MAX 5 API Calls a minute, so it will make a call every 12-15 seconds
         """
-
+        print("Scraping " + str(len(tickers)) + " tickers:")
         for ticker in tickers:
+            print("Scraping " + ticker + "...")
             meta, df = self.scraper.get_daily(ticker)
             self.db.insert(meta, df)
             time.sleep(12 + random.randint(0, 3))
@@ -88,5 +89,5 @@ if __name__ == '__main__':
     # test_set = ['AAPL', 'MSFT', 'AMZN', 'GOOGL']
     # download_data(test_set, '../data/')
     batch_scraper = BatchScraper()
-    tickers = batch_scraper.get_sp_tickers(5)
+    tickers = batch_scraper.get_sp_tickers(50)
     batch_scraper.store_data_to_db(tickers)
