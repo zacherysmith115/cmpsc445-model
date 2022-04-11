@@ -86,8 +86,6 @@ class BatchScraper():
 
 
 if __name__ == '__main__':
-    # test_set = ['AAPL', 'MSFT', 'AMZN', 'GOOGL']
-    # download_data(test_set, '../data/')
     batch_scraper = BatchScraper()
     tickers = batch_scraper.get_sp_tickers(50)
     batch_scraper.store_data_to_db(tickers)
