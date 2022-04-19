@@ -17,24 +17,6 @@ class BatchScraper():
         self.db = TimeSeriesDB(key)
         self.scraper = StockScraper(key)
 
-    def download_data(self, tickers: List[str], dir: str) -> None:
-        """
-        Downloads stock information for each ticker and stores it in a JSON file.
-        """ 
-
-        data_set = []
-
-        for ticker in tickers: 
-            metadata, timeseries = self.scraper.get_daily(ticker)
-            timeseries = timeseries.to_dict()
-
-            metadata["6. Time Series"] = timeseries
-
-            data_set.append(metadata)
-
-        with open(dir + 'data.json', 'w', encoding='utf-8') as f:
-            json.dump(data_set, f, ensure_ascii=False, indent=4)
-
     def get_sp_tickers(self, num: int) -> List:
         """
         Gets top amount of weighted companies in s&p500. Maximum of 500 companies.
@@ -80,6 +62,7 @@ class BatchScraper():
         for ticker in tickers:
             print("Scraping " + ticker + "...")
             meta, df = self.scraper.get_daily(ticker)
+            df = df.iloc[:365]
             self.db.insert(meta, df)
             time.sleep(12 + random.randint(0, 3))
 

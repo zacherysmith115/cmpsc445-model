@@ -20,6 +20,10 @@ from tensorflow.python.keras.metrics import MeanAbsoluteError
 from tensorflow.python.keras.callbacks import EarlyStopping
 from tensorflow.python.keras.callbacks import History
 
+from sqlalchemy import create_engine
+from sqlalchemy import MetaData
+
+
 """
 Tensorflow Logging: 
     0 = all messages printed (default)
@@ -30,14 +34,14 @@ Tensorflow Logging:
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = '1'
 
 config = {
-    "input_width": 20,
+    "input_width": 30,
     "label_width": 10,
     "offset": 10,
     "num_features": None,
-    "columns": ["4. close"],
+    "columns": ["close"],
     "train_split": 0.7,
     "val_split": 0.8,
-    "batch_size": 32,
+    "batch_size": 16,
     "epochs": 36,
     "patience": 2,
     "loss_func": MeanSquaredError(),
@@ -58,9 +62,6 @@ class Sequence(object):
 
     def __init__(self, sym: str, timeseries: DataFrame) -> None:
         timeseries = timeseries.iloc[::-1]
-
-        if len(timeseries > 1300):
-            timeseries=timeseries[:1300]
 
         self.sym = sym
         self.ts_df: DataFrame = timeseries
@@ -101,7 +102,7 @@ class Sequence(object):
 
 
     def __repr__(self) -> str:
-        return f'\n{str(self.train_df)}\n'
+        return (f'Sequence Shape\nTrain/Val/Test: {self.train_df.shape}/{self.val_df.shape}/{self.test_df.shape}')
 
 
     def get_splits(self) -> Tuple[DataFrame, DataFrame, DataFrame]:
@@ -113,12 +114,12 @@ class Sequence(object):
 
         indices = [i for i in range(len(self.ts_df))]
         train_indices = indices[0:int(self.n_rows*self.train_split)]
-        val_indices = indices[int(self.n_rows*self.train_split):int(self.n_rows*self.test_split)]
-        test_indices = indices[int(self.n_rows*self.test_split):]
+        val_indices = indices[int(self.n_rows*self.train_split):int(self.n_rows*self.val_split)]
+        test_indices = indices[int(self.n_rows*self.val_split):]
 
-        plt.plot(train_indices, self.train_df['4. close'], c='#ff0000', label='train')
-        plt.plot(val_indices, self.val_df['4. close'], c='#00ff00', label='val')
-        plt.plot(test_indices, self.test_df['4. close'], c='#0000ff', label='test')
+        plt.plot(train_indices, self.train_df['close'], c='#ff0000', label='train')
+        plt.plot(val_indices, self.val_df['close'], c='#00ff00', label='val')
+        plt.plot(test_indices, self.test_df['close'], c='#0000ff', label='test')
         
         plt.ylabel('Close [normed]')
         plt.xlabel('Time Step')
@@ -187,7 +188,7 @@ class WindowGenerator(object):
 
         inputs: Tensor = features[:, self.inputs_slice, :]
         labels = features[:, self.labels_slice, :]
-        labels = tf.stack([labels[:, :, self.column_indices[name]] for name in self.label_columns], 
+        labels: Tensor = tf.stack([labels[:, :, self.column_indices[name]] for name in self.label_columns], 
                         axis=-1)
 
         inputs.set_shape([None, self.inputs_width, None])
@@ -258,17 +259,21 @@ class WindowGenerator(object):
                 f'Label column names: {self.label_columns}\n')
 
 
-def read_data(src: str) -> List[Sequence]:
+def load_data() -> List[Sequence]:
     """Function to load local stored data"""
 
+    engine = create_engine('sqlite:///../data/test.db')
+
+    metadata = MetaData(engine)
+    metadata.reflect(engine)
+    syms = list(metadata.tables.keys())
+    syms = ['AAPL', 'TSLA']
     data = []
-    with open(src, 'r') as f:
-        for r in json.loads(f.read()): 
-            sym = r["2. Symbol"]
-            df = DataFrame.from_dict(r["6. Time Series"], dtype=float)
+    for sym in syms:
+        df = pd.read_sql_table(sym, engine.connect(), index_col='date', parse_dates=['date'])
+        data.append(Sequence(sym, df))
 
-            data.append(Sequence(sym, df))
-
+    assert len(data) == len(syms)
     return data
 
 
@@ -278,14 +283,15 @@ def fit(model: Model, window: WindowGenerator) -> History:
                   metrics=config["metrics"])
 
     history = model.fit(window.get_train_dataset(),
-                           epochs=config["epochs"],
-                           validation_data=window.get_val_dataset(),
-                           callbacks=config["callbacks"])
+                        epochs=config["epochs"],
+                        validation_data=window.get_val_dataset(),
+                        callbacks=config["callbacks"])
 
     return history
 
 
-data = read_data('../data/data.json')
+
+data = load_data()
 data = data[0]
 print(data)
 # data.plot()
@@ -297,6 +303,7 @@ window = WindowGenerator(config["input_width"],
                     config["columns"])
 
 print(window)
+print(window.train_df.dtypes)
 # window.plot()
 
 train_ds = window.get_train_dataset()
@@ -311,18 +318,19 @@ for inputs, labels in train_ds.take(1):
 
 
 lstm: Sequential = tf.keras.models.Sequential([
-            LSTM(32, return_sequences=False),
+            LSTM(16, return_sequences=False),
             Dense(config["label_width"]*config["num_features"],
                   kernel_initializer=tf.initializers.zeros()),
             Reshape([config["label_width"], config["num_features"]])
             ])
 
-# history = fit(lstm, window)
-# window.plot(model=lstm)
+history = fit(lstm, window)
+window.plot(model=lstm)
 
-# performance = (
-#     lstm.evaluate(window.get_val_dataset()),
-#     lstm.evaluate(window.get_test_dataset(), verbose=0)
-# )
 
-# print(performance)
+performance = (
+    lstm.evaluate(window.get_val_dataset()),
+    lstm.evaluate(window.get_test_dataset(), verbose=0)
+)
+
+print(performance)

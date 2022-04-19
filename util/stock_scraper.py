@@ -64,7 +64,7 @@ class StockScraper(object):
         return self.__parse_json(url, "Time Series (Intraday Extended)")
 
 
-    def get_daily(self, symbol: str, output_size: str='compact') -> Tuple[dict, pd.DataFrame]:
+    def get_daily(self, symbol: str, output_size: str='full') -> Tuple[dict, pd.DataFrame]:
         """
         Gets 20+ years of daily historical data
         Defaults to compact to return only last 100 datapoints
@@ -114,5 +114,6 @@ if __name__ == "__main__":
     key = config('API_KEY')
     scraper = StockScraper(key)
     metadata, timeseries = scraper.get_daily('NVDA')
+    timeseries = timeseries.iloc[:365]
     print(metadata)
-    print(timeseries.head(10))
+    print(timeseries)
