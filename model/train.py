@@ -77,29 +77,29 @@ if __name__ == "__main__":
     # Randomly select a sequence of data to evaluate against
     rand_index = randint(0, len(timeseries_sequences))
     sequence = timeseries_sequences[rand_index]
-    sequence.plot()
+    # sequence.plot()
     sym = sequence.sym
     window = WindowGenerator(config["input_width"], config["label_width"], config["offset"],
                                      sequence, config["columns"])
 
 
-    # Shape the inputs need to have an input length of [30, 5] with 30 timesteps and 5 features
+    # Get and shape the inputs 
     inputs: pd.DataFrame = pd.concat([window.train_df, window.val_df])
     inputs =  inputs.tail(30)
     inputs = np.array(inputs, dtype=float)
     inputs: Tensor = tf.convert_to_tensor(inputs[None, :, :], dtype=tf.float32)
 
 
-    # Grab the labels need to have shape of [10, 5] with 10 timesteps and 5 labels
-    labels = np.array(window.test_df.head(10))
+    # Get and shape the labels
+    labels = np.array(window.test_df.head(5))
     labels = labels[None, :, :]
-    predictions: np.ndarray = lstm.predict(inputs)
+    predictions: np.ndarray = lstm(inputs)
 
     print(f'Inputs: {inputs.shape}')
     print(f'Labels: {labels.shape}')
     print(f'Predictions: {predictions.shape}')
 
     # Plot predicted values vs labels
-    window.plot_predictions(sym, inputs[0], labels, predictions)
+    window.plot_predictions(inputs, labels, predictions)
 
 

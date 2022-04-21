@@ -1,4 +1,3 @@
-import json
 import os
 import numpy as np
 import pandas as pd
@@ -11,15 +10,10 @@ from typing import List
 from typing import Union
 from tensorflow import Tensor
 from tensorflow.python.keras.models import Model
-from tensorflow.python.keras.models import Sequential
-from tensorflow.python.keras.models import load_model
-from tensorflow.python.keras.layers import LSTM
-from tensorflow.python.keras.layers import Dense
-from tensorflow.python.keras.layers import Reshape
 from tensorflow.python.keras.losses import MeanSquaredError
 from tensorflow.python.keras.metrics import MeanAbsoluteError
 from tensorflow.python.keras.callbacks import EarlyStopping
-from tensorflow.python.keras.callbacks import History
+
 
 from sqlalchemy import create_engine
 from sqlalchemy import MetaData
@@ -34,7 +28,7 @@ os.environ["TF_CPP_MIN_LOG_LEVEL"] = '1'
 
 config = {
     "input_width": 30,
-    "label_width": 10,
+    "label_width": 5,
     "offset": 10,
     "num_features": None,
     "columns": ["close"],
@@ -92,7 +86,7 @@ class Sequence(object):
 
     def invert(self, df: DataFrame) -> DataFrame:
         """Reverses the normalization"""
-        return df * self.std + self.mean
+        return (df * self.std) + self.mean
 
 
     def __getitem__(self, i: Union[int, slice]) -> Union[DataFrame, Series]:
@@ -160,6 +154,7 @@ class WindowGenerator(object):
         offset = the timesteps betwen input_width and the end of label_width 
         """
         
+        self.sequence = seq
         self.train_df, self.val_df, self.test_df = seq.get_splits()
         self.label_columns = label_columns
         self.label_columns_indices = {name:i for i, name in enumerate(label_columns)}
@@ -240,8 +235,24 @@ class WindowGenerator(object):
         plt.xlabel('Day')
         plt.show()
 
-    def plot_predictions(self, sym: str, inputs: np.ndarray, labels: np.ndarray, 
+    def plot_predictions(self, inputs: np.ndarray, labels: np.ndarray, 
                          predictions: np.ndarray, column: str = config["columns"][0]) -> None:
+
+
+        # Convert 3D to 2D
+        inputs, labels, predictions = inputs[0], labels[0], predictions[0]
+        print(inputs.shape, labels.shape, predictions.shape)
+        columns = [key for key in self.column_indices.keys()]
+        inputs: DataFrame = self.sequence.invert(DataFrame(inputs))
+        labels: DataFrame = self.sequence.invert(DataFrame(labels))
+        predictions: DataFrame = self.sequence.invert(DataFrame(predictions))
+
+        print(inputs.shape, labels.shape, predictions.shape)
+        inputs = inputs.to_numpy(dtype=float)
+        labels = labels.to_numpy(dtype=float)
+        predictions = predictions.to_numpy(dtype=float)
+
+        print(inputs.shape, labels.shape, predictions.shape)
 
         plt.figure(figsize=(12, 8))
         plot_col_index = self.column_indices[column]
@@ -253,12 +264,12 @@ class WindowGenerator(object):
         plt.plot(input_indicies, inputs[:, plot_col_index],
                     label='Inputs', marker='.', zorder=-10)
 
-        label_indicies = range(len(inputs), len(inputs) + len(labels[0]))
+        label_indicies = range(len(inputs), len(inputs) + len(labels))
         label_col_index = self.label_columns_indices.get(column, None)
+        plt.scatter(label_indicies, labels[:, label_col_index], edgecolors='k', label='Labels', c='#2ca02c', s=64)
+        plt.scatter(label_indicies, predictions[:, label_col_index], edgecolors='k', marker='X', label='Predictions', c='#ff7f0e', s=64)
 
-        plt.scatter(label_indicies, labels[0, :, label_col_index], edgecolors='k', label='Labels', c='#2ca02c', s=64)
-        plt.scatter(label_indicies, predictions[0, :, label_col_index], edgecolors='k', marker='X', label='Predictions', c='#ff7f0e', s=64)
-        plt.title(sym)
+        plt.title(self.sequence.sym)
         plt.ylabel('Close')
         plt.xlabel('Date')
         plt.legend()
