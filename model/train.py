@@ -32,7 +32,7 @@ if __name__ == "__main__":
     break_point = 10
 
     lstm: Sequential = tf.keras.models.Sequential([
-                    CuDNNLSTM(16, return_sequences=False),
+                    LSTM(16, return_sequences=False),
                     Dense(config["label_width"]*config["num_features"],
                             kernel_initializer=tf.initializers.zeros()),
                     Reshape([config["label_width"], config["num_features"]])
