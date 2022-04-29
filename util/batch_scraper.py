@@ -20,7 +20,7 @@ class BatchScraper():
     def get_sp_tickers(self, num: int) -> List:
         """
         Gets top amount of weighted companies in s&p500. Maximum of 500 companies.
-        Requires lxml, html5llib, and beautifulsoup4 (pip install lxml html5lib beautifulsoup4)
+        Requires lxml, html5lib, and beautifulsoup4 (pip install lxml html5lib beautifulsoup4)
         """
         url = "https://www.slickcharts.com/sp500"
 
