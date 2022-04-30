@@ -14,7 +14,7 @@ from preprocess import config
 
 def fit(model: Model, window: WindowGenerator) -> History:
     model.compile(loss=config["loss_func"],
-                  optimizer=config["optmizer"])
+                  optimizer=config["optmizer"], metrics = [tf.keras.metrics.MeanSquaredError(), tf.keras.metrics.RootMeanSquaredError(), tf.keras.metrics.MeanAbsoluteError(), tf.keras.metrics.MeanAbsolutePercentageError()])
 
     history = model.fit(window.get_train_dataset(),
                         epochs=config["epochs"],

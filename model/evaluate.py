@@ -45,3 +45,34 @@ if __name__ == "__main__":
 
     # Plot predicted values vs labels
     window.plot_predictions(inputs, labels, predictions)
+
+    x_test = []
+    y_test = []
+
+    for sequence in timeseries_sequences:
+
+        window = WindowGenerator(sequence)
+
+        # Grab the end of val train and val data to use for input
+        inputs = np.concatenate((sequence.train, sequence.val), axis=0)
+        assert len(inputs) == len(sequence.train) + len(sequence.val)
+
+        # Shape the inputs
+        inputs_width = config["input_width"]
+        inputs = inputs[-1*inputs_width:]
+        assert len(inputs) == inputs_width
+        inputs: Tensor = tf.convert_to_tensor(inputs[None, :, :], dtype=tf.float32)
+
+        # Grab the unseen test data 
+        labels = sequence.test
+        label_width = config["label_width"]
+        labels = labels[:label_width]
+        assert len(labels) == label_width
+        labels = labels[None, :, :]
+
+        x_test.append(inputs)
+        y_test.append(labels)
+
+    eval = lstm.evaluate(x_test, y_test, return_dict=True)
+    for metric in eval:
+        print(metric + ":", eval[metric])
